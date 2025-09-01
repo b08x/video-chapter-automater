@@ -1,0 +1,93 @@
+# Docker build optimization - exclude unnecessary files from build context
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Python cache and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.venv/
+venv/
+ENV/
+env/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+coverage.xml
+*.cover
+
+# Build and distribution
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Documentation (unless building docs)
+docs/_build/
+
+# Logs and temporary files
+logs/
+*.log
+*.tmp
+*.temp
+
+# OS generated files
+Thumbs.db
+.DS_Store
+
+# Local configuration
+.env
+.env.local
+.env.*.local
+
+# Development tools
+.pre-commit-config.yaml
+.github/
+
+# Docker files (avoid recursive inclusion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Large media files for testing (exclude from build context)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.flv
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Node.js (if any frontend assets)
+node_modules/
+
+# Keep essential files for build
+!pyproject.toml
+!uv.lock
+!src/
+!test_gpu.py
