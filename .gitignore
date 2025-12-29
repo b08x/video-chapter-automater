@@ -8,3 +8,6 @@
 *.sqlite3
 *.db
 /.venv/
+.code-packager-csv-config
+session-*
+VideoChapterAutomater.csv
