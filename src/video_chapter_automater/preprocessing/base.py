@@ -21,10 +21,11 @@ if TYPE_CHECKING:
 @dataclass
 class PreprocessingResult:
     """Base result class for preprocessing operations."""
+
     success: bool
     output_path: Optional[Path] = None
     duration: float = 0.0
-    metadata: Dict[str, Any] = None
+    metadata: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         if self.metadata is None:
@@ -112,10 +113,7 @@ class CodecStrategy(ABC):
 
     @abstractmethod
     def get_ffmpeg_args(
-        self,
-        gpu_info: Optional[GPUInfo] = None,
-        preset: str = 'medium',
-        crf: int = 23
+        self, gpu_info: Optional[GPUInfo] = None, preset: str = "medium", crf: int = 23
     ) -> List[str]:
         """
         Generate FFmpeg arguments for this codec.
@@ -131,7 +129,7 @@ class CodecStrategy(ABC):
         pass
 
     @abstractmethod
-    def supports_gpu(self, gpu_vendor: 'GPUVendor') -> bool:
+    def supports_gpu(self, gpu_vendor: "GPUVendor") -> bool:
         """
         Check if this codec supports the given GPU vendor.
 
@@ -144,7 +142,7 @@ class CodecStrategy(ABC):
         pass
 
     @abstractmethod
-    def get_fallback_strategy(self) -> Optional['CodecStrategy']:
+    def get_fallback_strategy(self) -> Optional["CodecStrategy"]:
         """
         Get CPU fallback strategy if GPU encoding fails.
 
@@ -155,7 +153,7 @@ class CodecStrategy(ABC):
 
     def validate_preset(self, preset: str) -> bool:
         """Validate encoding preset."""
-        valid_presets = {'ultrafast', 'fast', 'medium', 'slow', 'veryslow'}
+        valid_presets = {"ultrafast", "fast", "medium", "slow", "veryslow"}
         return preset in valid_presets
 
     def validate_crf(self, crf: int) -> bool:
@@ -178,7 +176,7 @@ class HashStrategy(ABC):
         pass
 
     @abstractmethod
-    def compute_hash(self, image: 'Image.Image') -> 'ImageHash':
+    def compute_hash(self, image: "Image.Image") -> "ImageHash":
         """
         Compute perceptual hash of an image.
 
@@ -191,7 +189,7 @@ class HashStrategy(ABC):
         pass
 
     @abstractmethod
-    def compare(self, hash1: 'ImageHash', hash2: 'ImageHash') -> int:
+    def compare(self, hash1: "ImageHash", hash2: "ImageHash") -> int:
         """
         Compare two image hashes using Hamming distance.
 
@@ -205,10 +203,7 @@ class HashStrategy(ABC):
         pass
 
     def are_similar(
-        self,
-        hash1: 'ImageHash',
-        hash2: 'ImageHash',
-        threshold: int = 5
+        self, hash1: "ImageHash", hash2: "ImageHash", threshold: int = 5
     ) -> bool:
         """
         Check if two images are similar based on hash comparison.
