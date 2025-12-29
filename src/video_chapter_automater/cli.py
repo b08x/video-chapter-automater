@@ -193,9 +193,12 @@ def show_config() -> None:
     """Display current configuration."""
     try:
         from video_chapter_automater.setup_wizard import UserPreferences
-        config_file = Path.home() / ".video_chapter_automater" / "config.json"
+        from video_chapter_automater.app_paths import ApplicationPaths
+
+        app_paths = ApplicationPaths.for_current_platform()
+        config_file = app_paths.config_file
         preferences = UserPreferences.load(config_file)
-        
+
         config_text = (
             f"Configuration file: {config_file}\n\n"
             f"Installation Type: {preferences.installation_type.value}\n"

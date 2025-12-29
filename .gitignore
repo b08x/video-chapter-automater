@@ -11,3 +11,4 @@
 .code-packager-csv-config
 session-*
 VideoChapterAutomater.csv
+.ruff_cache/

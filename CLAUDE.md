@@ -72,6 +72,44 @@ mypy src/
 flake8 src/ tests/
 ```
 
+## Configuration Storage
+
+User preferences are stored in XDG-compliant, platform-specific locations:
+
+- **Linux**: `$XDG_CONFIG_HOME/video-chapter-automater/config.json` (default: `~/.config/video-chapter-automater/`)
+- **macOS**: `~/Library/Application Support/video-chapter-automater/config.json` (respects `$XDG_CONFIG_HOME` if set)
+- **Windows**: `%APPDATA%\video-chapter-automater\config.json` (respects `$XDG_CONFIG_HOME` if set)
+
+### Implementation
+
+Config path resolution is handled by the `ApplicationPaths` class:
+
+```python
+from video_chapter_automater.app_paths import ApplicationPaths
+
+# Get platform-appropriate paths
+app_paths = ApplicationPaths.for_current_platform()
+config_file = app_paths.config_file  # Platform-specific config.json path
+```
+
+The path management system is built on two modules:
+
+1. **`platform_dirs.py`**: Low-level XDG Base Directory Specification implementation
+   - Detects platform (Linux/macOS/Windows)
+   - Resolves XDG environment variables
+   - Provides config_home, data_home, cache_home
+
+2. **`app_paths.py`**: Application-specific path management
+   - Provides `config_dir`, `config_file` properties
+   - Includes `data_dir`, `cache_dir` for future use (XDG_DATA_HOME, XDG_CACHE_HOME)
+   - Factory methods: `for_current_platform()`, `for_testing(tmp_path)`
+
+### Migration Notes
+
+Old configuration location (`~/.video_chapter_automater/`) is no longer supported. Users upgrading from older versions need to:
+- Manually copy config to new location, OR
+- Re-run setup wizard (`vca --setup`)
+
 ## Architecture Overview
 
 ### Core Design Principles

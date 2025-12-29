@@ -31,6 +31,7 @@ from rich.columns import Columns
 from rich.status import Status
 
 from .gpu_detection import GPUDetector, ProcessingMode, GPUVendor
+from .app_paths import ApplicationPaths
 
 
 class InstallationType(Enum):
@@ -63,6 +64,28 @@ class UserPreferences:
     parallel_processing: bool = True
     first_run: bool = True
 
+    def __post_init__(self):
+        """Validate configuration parameters."""
+        # Validate scene_detection_threshold
+        if self.scene_detection_threshold < 0:
+            raise ValueError(
+                f"scene_detection_threshold must be >= 0, got {self.scene_detection_threshold}"
+            )
+
+        # Validate output_format
+        valid_formats = ["mp4", "mkv", "avi", "mov", "webm"]
+        if self.output_format not in valid_formats:
+            raise ValueError(
+                f"output_format must be one of {valid_formats}, got '{self.output_format}'"
+            )
+
+        # Validate gpu_preference
+        valid_gpu_prefs = ["auto", "nvidia", "intel", "cpu"]
+        if self.gpu_preference not in valid_gpu_prefs:
+            raise ValueError(
+                f"gpu_preference must be one of {valid_gpu_prefs}, got '{self.gpu_preference}'"
+            )
+
     def save(self, config_path: Path) -> None:
         """Save preferences to JSON file."""
         with open(config_path, 'w') as f:
@@ -86,8 +109,9 @@ class SetupWizard:
 
     def __init__(self):
         self.console = Console()
-        self.config_dir = Path.home() / ".video_chapter_automater"
-        self.config_file = self.config_dir / "config.json"
+        self.app_paths = ApplicationPaths.for_current_platform()
+        self.config_dir = self.app_paths.config_dir
+        self.config_file = self.app_paths.config_file
         self.preferences = UserPreferences.load(self.config_file)
         self.gpu_detector = GPUDetector()
         self.current_step = SetupStep.WELCOME
@@ -135,6 +159,73 @@ class SetupWizard:
             # Use python -m pip to ensure we use the right pip
             return f"{self.venv_python} -m pip"
         return None
+
+    def _ensure_pip_in_venv(self) -> bool:
+        """Ensure pip is installed in the virtual environment.
+
+        Returns:
+            bool: True if pip is available, False otherwise
+        """
+        if not self.venv_python:
+            return False
+
+        # Check if pip is already available
+        try:
+            result = subprocess.run(
+                [self.venv_python, "-m", "pip", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                return True
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # Try to install pip using ensurepip (standard library module)
+        try:
+            subprocess.run(
+                [self.venv_python, "-m", "ensurepip", "--upgrade"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=60
+            )
+            # Verify pip is now available
+            result = subprocess.run(
+                [self.venv_python, "-m", "pip", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                return True
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # If uv is available, try using it to install pip
+        if shutil.which("uv"):
+            try:
+                subprocess.run(
+                    ["uv", "pip", "install", "--python", self.venv_python, "pip"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=60
+                )
+                # Verify pip is now available
+                result = subprocess.run(
+                    [self.venv_python, "-m", "pip", "--version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    return True
+            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+
+        return False
 
     def run(self) -> bool:
         """Run the complete setup wizard."""
@@ -611,29 +702,62 @@ class SetupWizard:
                     else:
                         progress.update(
                             task, description=f"❌ {package_name} failed")
-                        
+
                         # Provide more helpful error information
                         error_msg = f"Failed to install {package_name}"
                         if package_name == "Rich TUI Library" and self._is_package_installed("rich"):
                             progress.update(task, description=f"✅ {package_name} already available")
                             continue
-                        
+
+                        # Stop progress display before interactive prompt
+                        progress.stop()
+
                         self.console.print(f"\n[red]{error_msg}[/red]")
-                        
+
+                        # Display captured installation errors for debugging
+                        if hasattr(self, '_last_install_error') and self._last_install_error:
+                            self.console.print("\n[yellow]Installation attempts:[/yellow]")
+                            # Show last 3 attempts to avoid overwhelming output
+                            for error in self._last_install_error[-3:]:
+                                method = error.get('method', 'Unknown method')
+                                self.console.print(f"  [dim]→ {method}[/dim]")
+
+                                if 'stderr' in error and error['stderr']:
+                                    # Truncate long error messages
+                                    stderr_preview = error['stderr'][:300]
+                                    if len(error['stderr']) > 300:
+                                        stderr_preview += "..."
+                                    self.console.print(f"    [dim red]{stderr_preview}[/dim red]")
+
+                                if 'error' in error:
+                                    self.console.print(f"    [dim red]{error['error']}[/dim red]")
+
+                                if 'returncode' in error:
+                                    self.console.print(f"    [dim]Exit code: {error['returncode']}[/dim]")
+
                         # Show installation suggestions
                         if not self.in_venv and self.venv_path.exists():
                             self.console.print("[yellow]Suggestion: Try running this setup from within the virtual environment:[/yellow]")
                             self.console.print(f"[dim]source .venv/bin/activate && python -m video_chapter_automater.setup_wizard[/dim]")
-                        
+
                         if not Confirm.ask(f"Continue without {package_name}?", default=True):
                             return False
 
+                        # Resume progress display
+                        progress.start()
+
                 except Exception as e:
+                    # Stop progress display before interactive prompt
+                    progress.stop()
+
                     self.console.print(
                         f"[red]Unexpected error installing {package_name}: {e}[/red]")
 
                     if not Confirm.ask(f"Continue without {package_name}?", default=True):
                         return False
+
+                    # Resume progress display
+                    progress.start()
 
                 progress.update(main_task, advance=1)
 
@@ -680,14 +804,26 @@ class SetupWizard:
         return packages
 
     def _install_package(self, package_spec: str) -> bool:
-        """Install a single package using virtual environment-aware methods."""
+        """Install a single package using virtual environment-aware methods.
+
+        Returns:
+            bool: True if installation succeeded, False otherwise
+
+        Note:
+            Stores last error in self._last_install_error for debugging
+        """
         # First check if package is already installed
         if self._is_package_installed(package_spec.split(">=")[0].split("==")[0]):
             return True
 
+        # Ensure pip is available in the virtual environment
+        if self.venv_python and not self._ensure_pip_in_venv():
+            # If we can't get pip installed, fall back to system installation methods
+            pass
+
         # Try different installation methods in order of preference
         installation_methods = []
-        
+
         # If we have virtual environment, prefer venv-specific methods
         if self.venv_python and self.venv_pip:
             # Method 1: uv pip install (most reliable for uv-managed projects)
@@ -695,26 +831,29 @@ class SetupWizard:
                 installation_methods.append([
                     "uv", "pip", "install", package_spec
                 ])
-            
+
             # Method 2: uv pip install with explicit python (if method 1 fails)
             if shutil.which("uv"):
                 installation_methods.append([
                     "uv", "pip", "install", "--python", self.venv_python, package_spec
                 ])
-            
+
             # Method 3: Direct venv pip (fallback)
             installation_methods.append(
                 self.venv_pip.split() + ["install", package_spec]
             )
-        
+
         # Method 3: Try uv add (but only if we have pyproject.toml)
         if (self.project_root / "pyproject.toml").exists() and shutil.which("uv"):
             installation_methods.append(["uv", "add", package_spec])
-        
+
         # Method 4: Fallback to system pip (last resort)
         installation_methods.append([
             sys.executable, "-m", "pip", "install", package_spec
         ])
+
+        # Track errors for debugging
+        errors = []
 
         for method in installation_methods:
             try:
@@ -729,9 +868,23 @@ class SetupWizard:
                 package_name = package_spec.split(">=")[0].split("==")[0].split("[")[0]
                 if self._is_package_installed(package_name):
                     return True
-            except (subprocess.CalledProcessError, FileNotFoundError):
+            except subprocess.CalledProcessError as e:
+                errors.append({
+                    "method": " ".join(method),
+                    "returncode": e.returncode,
+                    "stderr": e.stderr.strip() if e.stderr else "",
+                    "stdout": e.stdout.strip() if e.stdout else ""
+                })
                 continue
-        
+            except FileNotFoundError as e:
+                errors.append({
+                    "method": " ".join(method),
+                    "error": f"Command not found: {e}"
+                })
+                continue
+
+        # Store last error for debugging
+        self._last_install_error = errors
         return False
 
     def _is_package_installed(self, package_name: str) -> bool:
@@ -903,7 +1056,7 @@ ENTRYPOINT ["uv", "run", "python", "-m", "video_chapter_automater"]
             )
 
         # Save preferences
-        self.config_dir.mkdir(exist_ok=True)
+        self.app_paths.ensure_config_dir()
         self.preferences.first_run = False
         self.preferences.save(self.config_file)
 

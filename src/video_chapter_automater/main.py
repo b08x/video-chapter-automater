@@ -42,6 +42,7 @@ import logging
 # Local imports
 from .gpu_detection import detect_gpu_capabilities, ProcessingMode
 from .setup_wizard import UserPreferences
+from .app_paths import ApplicationPaths
 
 # --- Advanced Configuration and State Management ---
 
@@ -76,9 +77,10 @@ class EnhancedVideoProcessor:
         self.console = console or Console()
         self.stats = ProcessingStats()
         self.resources = SystemResources()
-        self.config_dir = Path.home() / ".video_chapter_automater"
-        self.config_file = self.config_dir / "config.json"
-        
+        self.app_paths = ApplicationPaths.for_current_platform()
+        self.config_dir = self.app_paths.config_dir
+        self.config_file = self.app_paths.config_file
+
         # Load user preferences
         self.preferences = UserPreferences.load(self.config_file)
         

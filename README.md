@@ -56,3 +56,40 @@ docker run --rm -it --gpus all \
 ### Output
 
 The script will create a new video file in the same directory named `my_video_with_chapters.mp4`. This new file is a direct copy of the original video and audio streams but includes the new chapter markers.
+
+## Configuration
+
+VideoChapterAutomater stores user preferences in platform-specific, standards-compliant locations:
+
+**Linux**: `~/.config/video-chapter-automater/config.json`
+**macOS**: `~/Library/Application Support/video-chapter-automater/config.json`
+**Windows**: `%APPDATA%\video-chapter-automater\config.json`
+
+### XDG Base Directory Support
+
+On all platforms, you can override the configuration directory by setting the `XDG_CONFIG_HOME` environment variable:
+
+```bash
+export XDG_CONFIG_HOME=/custom/path
+vca --setup  # Config will be saved to /custom/path/video-chapter-automater/config.json
+```
+
+### Viewing Configuration
+
+To view your current configuration:
+
+```bash
+vca --config
+```
+
+### First-Time Setup
+
+Run the interactive setup wizard to configure your preferences:
+
+```bash
+vca --setup
+```
+
+**Note**: If you previously used an older version that stored configuration at `~/.video_chapter_automater/`, your old configuration will not be automatically migrated. You can either:
+- Manually copy `config.json` to the new location
+- Re-run the setup wizard with `vca --setup`
