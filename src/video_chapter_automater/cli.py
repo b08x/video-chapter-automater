@@ -6,33 +6,42 @@ import argparse
 import sys
 from pathlib import Path
 
-from rich.console import Console
-from rich.traceback import install as install_traceback
-from rich.panel import Panel
+try:
+    from rich.console import Console
+    from rich.traceback import install as install_traceback
+    from rich.panel import Panel
+    # Install Rich traceback handler for beautiful exceptions
+    install_traceback(show_locals=True)
+    console = Console()
+    RICH_AVAILABLE = True
+except ImportError:
+    console = None
+    RICH_AVAILABLE = False
 
-from video_chapter_automater.core import VideoChapterProcessor
+from video_chapter_automater.processor import VideoProcessor
 from video_chapter_automater.exceptions import VideoChapterAutomaterError
 from video_chapter_automater.gpu_detection import detect_gpu_capabilities
-
-# Install Rich traceback handler for beautiful exceptions
-install_traceback(show_locals=True)
-console = Console()
 
 
 def create_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(
         prog="video-chapter-automater",
-        description="Automate video chapter creation using PySceneDetect, chapconv, and FFmpeg.",
+        description="Automate video chapter creation using PySceneDetect and FFmpeg with GPU acceleration.",
         epilog=(
             "This tool requires the following external dependencies:\n"
-            "  - scenedetect: Python package for scene detection\n"
-            "  - chapconv: Tool for chapter format conversion\n"
+            "  - scenedetect: Python package for scene detection\n" 
             "  - ffmpeg: Video processing tool\n\n"
+            "Processing modes:\n"
+            "  - auto: Automatically choose best interface (default)\n"
+            "  - simple: Basic processing with minimal output\n" 
+            "  - enhanced: Rich interactive interface with progress bars\n\n"
             "Example usage:\n"
-            "  video-chapter-automater my_video.mp4\n"
-            "  vca /path/to/video.mkv\n"
-            "  vca --setup    # Run interactive setup wizard"
+            "  vca my_video.mp4                    # Auto mode\n"
+            "  vca /path/to/video.mkv --simple     # Simple mode\n"
+            "  vca video.mp4 --enhanced            # Rich UI mode\n"
+            "  vca --setup                         # Run setup wizard\n"
+            "  vca --gpu-info                      # Show GPU info"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -48,6 +57,44 @@ def create_parser() -> argparse.ArgumentParser:
         "-s", "--silent",
         action="store_true",
         help="Suppress non-error output"
+    )
+    
+    parser.add_argument(
+        "-m", "--mode",
+        choices=["auto", "simple", "enhanced"],
+        default="auto",
+        help="Processing mode: auto (default), simple, or enhanced"
+    )
+    
+    parser.add_argument(
+        "--simple",
+        action="store_const",
+        dest="mode",
+        const="simple",
+        help="Use simple processing mode (equivalent to --mode simple)"
+    )
+    
+    parser.add_argument(
+        "--enhanced", 
+        action="store_const",
+        dest="mode",
+        const="enhanced",
+        help="Use enhanced Rich UI mode (equivalent to --mode enhanced)"
+    )
+    
+    parser.add_argument(
+        "-t", "--threshold",
+        type=float,
+        default=30.0,
+        help="Scene detection threshold (default: 30.0, lower = more chapters)"
+    )
+    
+    parser.add_argument(
+        "--no-cleanup",
+        action="store_false", 
+        dest="cleanup",
+        default=True,
+        help="Keep intermediate files (CSV, chapters.txt)"
     )
     
     parser.add_argument(
@@ -117,18 +164,29 @@ def validate_input_file(video_file: Path) -> None:
 
 def show_gpu_info() -> None:
     """Display GPU detection information."""
-    console.print(Panel(
-        "🎮 GPU Detection & System Capabilities",
-        title="[bold blue]System Information[/bold blue]",
-        border_style="blue"
-    ))
+    if console:
+        console.print(Panel(
+            "🎮 GPU Detection & System Capabilities",
+            title="[bold blue]System Information[/bold blue]",
+            border_style="blue"
+        ))
+    else:
+        print("🎮 GPU Detection & System Capabilities")
+        print("=" * 40)
     
     processing_mode, selected_gpu, ffmpeg_args = detect_gpu_capabilities()
     
     # Additional system info
     import platform
-    console.print(f"[dim]Platform:[/dim] {platform.system()} {platform.release()}")
-    console.print(f"[dim]Python:[/dim] {sys.version.split()[0]}")
+    platform_info = f"Platform: {platform.system()} {platform.release()}"
+    python_info = f"Python: {sys.version.split()[0]}"
+    
+    if console:
+        console.print(f"[dim]{platform_info}[/dim]")
+        console.print(f"[dim]{python_info}[/dim]")
+    else:
+        print(platform_info)
+        print(python_info)
 
 
 def show_config() -> None:
@@ -138,7 +196,7 @@ def show_config() -> None:
         config_file = Path.home() / ".video_chapter_automater" / "config.json"
         preferences = UserPreferences.load(config_file)
         
-        console.print(Panel(
+        config_text = (
             f"Configuration file: {config_file}\n\n"
             f"Installation Type: {preferences.installation_type.value}\n"
             f"GPU Preference: {preferences.gpu_preference}\n"
@@ -146,15 +204,32 @@ def show_config() -> None:
             f"Default Output Dir: {preferences.default_output_dir or 'Current directory'}\n"
             f"Scene Detection Threshold: {preferences.scene_detection_threshold}\n"
             f"Cleanup Intermediate Files: {preferences.cleanup_intermediate_files}\n"
-            f"Parallel Processing: {preferences.parallel_processing}",
-            title="[bold green]Current Configuration[/bold green]",
-            border_style="green"
-        ))
+            f"Parallel Processing: {preferences.parallel_processing}"
+        )
+        
+        if console:
+            console.print(Panel(
+                config_text,
+                title="[bold green]Current Configuration[/bold green]",
+                border_style="green"
+            ))
+        else:
+            print("Current Configuration")
+            print("=" * 21)
+            print(config_text)
         
     except ImportError:
-        console.print("[yellow]Configuration not available - run setup first[/yellow]")
+        msg = "Configuration not available - run setup first"
+        if console:
+            console.print(f"[yellow]{msg}[/yellow]")
+        else:
+            print(msg)
     except Exception as e:
-        console.print(f"[red]Error reading configuration: {e}[/red]")
+        error_msg = f"Error reading configuration: {e}"
+        if console:
+            console.print(f"[red]{error_msg}[/red]")
+        else:
+            print(error_msg)
 
 
 def run_setup_wizard() -> int:
@@ -205,37 +280,61 @@ def main(args: list[str] | None = None) -> int:
     validate_input_file(parsed_args.video_file)
     
     try:
-        # Process the video
-        processor = VideoChapterProcessor(silent=parsed_args.silent)
-        output_file = processor.process_video(parsed_args.video_file)
+        # Create processor with appropriate mode
+        processor = VideoProcessor(
+            mode=parsed_args.mode,
+            silent=parsed_args.silent,
+            enable_rich_ui=None,  # Auto-detect based on mode
+            enable_logging=True
+        )
+        
+        # Process the video with options
+        output_file = processor.process_video(
+            parsed_args.video_file,
+            threshold=parsed_args.threshold,
+            cleanup=parsed_args.cleanup
+        )
         
         if parsed_args.silent:
             # In silent mode, just print the output file path
-            console.print(str(output_file))
+            if console:
+                console.print(str(output_file))
+            else:
+                print(str(output_file))
         
         return 0
         
     except VideoChapterAutomaterError as e:
-        console.print(
-            f"[bold red]Error:[/bold red] {e.message}",
-            file=sys.stderr
-        )
+        error_msg = f"Error: {e.message}"
+        if console:
+            # Use console.err for stderr output 
+            console = Console(stderr=True)
+            console.print(f"[bold red]{error_msg}[/bold red]")
+        else:
+            print(error_msg, file=sys.stderr)
         return 1
         
     except KeyboardInterrupt:
-        console.print(
-            "\n[bold yellow]Operation cancelled by user.[/bold yellow]",
-            file=sys.stderr
-        )
+        msg = "Operation cancelled by user."
+        if console:
+            err_console = Console(stderr=True)
+            err_console.print(f"\n[bold yellow]{msg}[/bold yellow]")
+        else:
+            print(f"\n{msg}", file=sys.stderr)
         return 130  # Standard exit code for SIGINT
         
     except Exception as e:
-        console.print(
-            f"[bold red]Unexpected error:[/bold red] {e}",
-            file=sys.stderr
-        )
-        if not parsed_args.silent:
-            console.print_exception()
+        error_msg = f"Unexpected error: {e}"
+        if console:
+            err_console = Console(stderr=True)
+            err_console.print(f"[bold red]{error_msg}[/bold red]")
+            if not parsed_args.silent:
+                err_console.print_exception()
+        else:
+            print(error_msg, file=sys.stderr)
+            if not parsed_args.silent:
+                import traceback
+                traceback.print_exc()
         return 1
 
 

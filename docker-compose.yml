@@ -1,0 +1,51 @@
+# Docker Compose configuration for Video Chapter Automater
+# Provides both development and production environments with GPU support
+
+version: '3.8'
+
+# Shared configuration
+x-common: &common
+  image: video-chapter-automater:latest
+  volumes:
+    # Mount directories for input/output
+    - ./data:/data:ro          # Input videos (read-only)
+    - ./output:/output:rw      # Generated chapters (read-write)
+    - ./logs:/app/logs:rw      # Application logs
+  environment:
+    - PYTHONUNBUFFERED=1
+    - UV_CACHE_DIR=/tmp/uv-cache
+    # GPU detection and fallback
+    - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-all}
+    - FORCE_CPU=${FORCE_CPU:-false}
+  networks:
+    - video-processing
+
+services:
+  # Production service with GPU support
+  video-chapter-automater:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        - PYTHON_VERSION=${PYTHON_VERSION:-3.11}
+        - UV_VERSION=${UV_VERSION:-0.4.15}
+        - BUILD_TYPE=production
+      cache_from:
+        - video-chapter-automater:cache
+      # Multi-platform build support
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    deploy:
+      resources:
+        reservations:
+          devices:
+            # GPU reservation for hardware acceleration
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, utility]
+    restart: unless-stopped
+    # Default command - override with docker-compose run args
+    command: [\"--help\"]\n\n  # Development service with full tooling\n  dev:\n    <<: *common\n    build:\n      context: .\n      dockerfile: Dockerfile\n      target: development\n      args:\n        - PYTHON_VERSION=${PYTHON_VERSION:-3.11}\n        - UV_VERSION=${UV_VERSION:-0.4.15}\n        - BUILD_TYPE=development\n    volumes:\n      # Additional development mounts\n      - .:/app:rw                    # Source code hot reload\n      - ./data:/data:ro\n      - ./output:/output:rw\n      - ./logs:/app/logs:rw\n      # Cache volumes for faster rebuilds\n      - uv-cache:/tmp/uv-cache\n      - python-cache:/home/developer/.cache\n    environment:\n      - PYTHONUNBUFFERED=1\n      - UV_CACHE_DIR=/tmp/uv-cache\n      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-all}\n      - FORCE_CPU=${FORCE_CPU:-false}\n      - DEVELOPMENT_MODE=true\n    deploy:\n      resources:\n        reservations:\n          devices:\n            - driver: nvidia\n              count: 1\n              capabilities: [gpu, compute, utility]\n    # Keep container running for interactive development\n    tty: true\n    stdin_open: true\n    command: [\"/bin/bash\"]\n\n  # CPU-only service (no GPU requirements)\n  cpu-only:\n    <<: *common\n    build:\n      context: .\n      dockerfile: Dockerfile\n      target: production\n      args:\n        - PYTHON_VERSION=${PYTHON_VERSION:-3.11}\n        - UV_VERSION=${UV_VERSION:-0.4.15}\n        - BUILD_TYPE=production\n    environment:\n      - PYTHONUNBUFFERED=1\n      - UV_CACHE_DIR=/tmp/uv-cache\n      - FORCE_CPU=true  # Force CPU-only processing\n    # No GPU reservation\n    command: [\"--help\"]\n\n  # GPU capability testing service\n  gpu-test:\n    <<: *common\n    build:\n      context: .\n      dockerfile: Dockerfile\n      target: gpu-test\n    deploy:\n      resources:\n        reservations:\n          devices:\n            - driver: nvidia\n              count: 1\n              capabilities: [gpu, compute, utility]\n    command: [\"python\", \"test_gpu.py\"]\n\n# Named volumes for caching\nvolumes:\n  uv-cache:\n    driver: local\n  python-cache:\n    driver: local\n\n# Network for service communication\nnetworks:\n  video-processing:\n    driver: bridge

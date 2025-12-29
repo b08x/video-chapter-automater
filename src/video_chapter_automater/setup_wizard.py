@@ -92,6 +92,13 @@ class SetupWizard:
         self.gpu_detector = GPUDetector()
         self.current_step = SetupStep.WELCOME
 
+        # Virtual environment detection
+        self.project_root = Path.cwd()
+        self.venv_path = self.project_root / ".venv"
+        self.in_venv = self._detect_virtual_environment()
+        self.venv_python = self._get_venv_python()
+        self.venv_pip = self._get_venv_pip()
+
         # System requirements
         self.required_python = (3, 8)
         self.required_tools = ["ffmpeg", "scenedetect"]
@@ -101,6 +108,33 @@ class SetupWizard:
         self.system_requirements_met = False
         self.gpu_capabilities = None
         self.installation_successful = False
+
+    def _detect_virtual_environment(self) -> bool:
+        """Detect if we're running in a virtual environment."""
+        # Check if VIRTUAL_ENV is set
+        if os.environ.get('VIRTUAL_ENV'):
+            return True
+        
+        # Check if .venv directory exists and has proper structure
+        if self.venv_path.exists() and (self.venv_path / "bin" / "python").exists():
+            return True
+            
+        return False
+
+    def _get_venv_python(self) -> Optional[str]:
+        """Get the Python executable for the virtual environment."""
+        if self.venv_path.exists():
+            python_path = self.venv_path / "bin" / "python"
+            if python_path.exists():
+                return str(python_path)
+        return None
+
+    def _get_venv_pip(self) -> Optional[str]:
+        """Get the pip executable for the virtual environment."""
+        if self.venv_python:
+            # Use python -m pip to ensure we use the right pip
+            return f"{self.venv_python} -m pip"
+        return None
 
     def run(self) -> bool:
         """Run the complete setup wizard."""
@@ -213,6 +247,17 @@ class SetupWizard:
         )
 
         self.console.print(overview_panel)
+
+        # Virtual environment status
+        if self.venv_path.exists():
+            if self.in_venv:
+                venv_status = "[bold green]✅ Virtual environment active and detected[/bold green]"
+            else:
+                venv_status = "[bold yellow]⚠️ Virtual environment found but not active - will be used automatically[/bold yellow]"
+        else:
+            venv_status = "[bold blue]ℹ️ No virtual environment found - will install to system or create one[/bold blue]"
+        
+        self.console.print(f"\n{venv_status}")
 
         # First-run detection
         if self.preferences.first_run:
@@ -559,19 +604,35 @@ class SetupWizard:
                     f"Installing {package_name}...", total=None)
 
                 try:
-                    if self._install_package(package_spec):
+                    install_result = self._install_package(package_spec)
+                    if install_result:
                         progress.update(
                             task, description=f"✅ {package_name} installed")
                     else:
                         progress.update(
                             task, description=f"❌ {package_name} failed")
-                        return False
+                        
+                        # Provide more helpful error information
+                        error_msg = f"Failed to install {package_name}"
+                        if package_name == "Rich TUI Library" and self._is_package_installed("rich"):
+                            progress.update(task, description=f"✅ {package_name} already available")
+                            continue
+                        
+                        self.console.print(f"\n[red]{error_msg}[/red]")
+                        
+                        # Show installation suggestions
+                        if not self.in_venv and self.venv_path.exists():
+                            self.console.print("[yellow]Suggestion: Try running this setup from within the virtual environment:[/yellow]")
+                            self.console.print(f"[dim]source .venv/bin/activate && python -m video_chapter_automater.setup_wizard[/dim]")
+                        
+                        if not Confirm.ask(f"Continue without {package_name}?", default=True):
+                            return False
 
                 except Exception as e:
                     self.console.print(
-                        f"[red]Error installing {package_name}: {e}[/red]")
+                        f"[red]Unexpected error installing {package_name}: {e}[/red]")
 
-                    if not Confirm.ask(f"Continue without {package_name}?", default=False):
+                    if not Confirm.ask(f"Continue without {package_name}?", default=True):
                         return False
 
                 progress.update(main_task, advance=1)
@@ -619,28 +680,106 @@ class SetupWizard:
         return packages
 
     def _install_package(self, package_spec: str) -> bool:
-        """Install a single package using uv."""
-        try:
-            # Try uv first
-            result = subprocess.run(
-                ["uv", "add", package_spec],
-                capture_output=True,
-                text=True,
-                check=True
-            )
+        """Install a single package using virtual environment-aware methods."""
+        # First check if package is already installed
+        if self._is_package_installed(package_spec.split(">=")[0].split("==")[0]):
             return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
+
+        # Try different installation methods in order of preference
+        installation_methods = []
+        
+        # If we have virtual environment, prefer venv-specific methods
+        if self.venv_python and self.venv_pip:
+            # Method 1: uv pip install (most reliable for uv-managed projects)
+            if shutil.which("uv"):
+                installation_methods.append([
+                    "uv", "pip", "install", package_spec
+                ])
+            
+            # Method 2: uv pip install with explicit python (if method 1 fails)
+            if shutil.which("uv"):
+                installation_methods.append([
+                    "uv", "pip", "install", "--python", self.venv_python, package_spec
+                ])
+            
+            # Method 3: Direct venv pip (fallback)
+            installation_methods.append(
+                self.venv_pip.split() + ["install", package_spec]
+            )
+        
+        # Method 3: Try uv add (but only if we have pyproject.toml)
+        if (self.project_root / "pyproject.toml").exists() and shutil.which("uv"):
+            installation_methods.append(["uv", "add", package_spec])
+        
+        # Method 4: Fallback to system pip (last resort)
+        installation_methods.append([
+            sys.executable, "-m", "pip", "install", package_spec
+        ])
+
+        for method in installation_methods:
             try:
-                # Fallback to pip
                 result = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", package_spec],
+                    method,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    cwd=self.project_root
+                )
+                # Verify installation was successful
+                package_name = package_spec.split(">=")[0].split("==")[0].split("[")[0]
+                if self._is_package_installed(package_name):
+                    return True
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                continue
+        
+        return False
+
+    def _is_package_installed(self, package_name: str) -> bool:
+        """Check if a package is installed in the virtual environment."""
+        try:
+            if self.venv_python:
+                # Check in virtual environment
+                result = subprocess.run(
+                    [self.venv_python, "-c", f"import {package_name.replace('-', '_')}"],
                     capture_output=True,
                     text=True,
                     check=True
                 )
                 return True
-            except subprocess.CalledProcessError:
-                return False
+            else:
+                # Check in current environment
+                result = subprocess.run(
+                    [sys.executable, "-c", f"import {package_name.replace('-', '_')}"],
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # Try alternative import names for common packages
+            alt_names = {
+                "scenedetect": "scenedetect",
+                "opencv-python": "cv2",
+                "opencv-python-headless": "cv2",
+                "rich": "rich",
+                "nvidia-ml-py": "pynvml",
+                "intel-extension-for-pytorch": "intel_extension_for_pytorch"
+            }
+            
+            if package_name in alt_names:
+                try:
+                    python_exe = self.venv_python or sys.executable
+                    result = subprocess.run(
+                        [python_exe, "-c", f"import {alt_names[package_name]}"],
+                        capture_output=True,
+                        text=True,
+                        check=True
+                    )
+                    return True
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    pass
+            
+            return False
 
     def _setup_docker_environment(self) -> bool:
         """Set up Docker-based environment."""
