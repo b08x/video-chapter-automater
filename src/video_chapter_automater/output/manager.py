@@ -25,6 +25,7 @@ class OutputType(Enum):
     CHAPTERS = "chapters"
     METADATA = "metadata"
     LOGS = "logs"
+    SOURCE = "source"
 
 
 class OutputManager:
@@ -52,17 +53,26 @@ class OutputManager:
         OutputType.CHAPTERS: "chapters",
         OutputType.METADATA: "metadata",
         OutputType.LOGS: "logs",
+        OutputType.SOURCE: "source",
     }
 
-    def __init__(self, base_dir: Path = Path("./vca_output"), auto_create: bool = True):
+    def __init__(
+        self,
+        base_dir: Path = Path("./vca_output"),
+        project_name: Optional[str] = None,
+        auto_create: bool = True
+    ):
         """
         Initialize output manager.
 
         Args:
             base_dir: Base output directory path
+            project_name: Optional project subfolder name
             auto_create: Automatically create directory structure if True
         """
         self.base_dir = base_dir.resolve()
+        if project_name:
+            self.base_dir = self.base_dir / project_name
 
         if auto_create:
             self.ensure_structure()

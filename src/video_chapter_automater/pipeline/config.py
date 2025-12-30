@@ -93,6 +93,8 @@ class PipelineConfig:
         max_parallel_stages: Maximum concurrent stages (for parallel mode)
         stop_on_error: Halt entire pipeline on first error
         cleanup_on_failure: Remove partial outputs if pipeline fails
+        project_name: Optional project subfolder name
+        copy_source: Whether to copy source video to project folder
         metadata: Additional pipeline metadata
     """
     stages: List[StageConfig] = field(default_factory=list)
@@ -103,6 +105,8 @@ class PipelineConfig:
     max_parallel_stages: int = 2
     stop_on_error: bool = True
     cleanup_on_failure: bool = False
+    project_name: Optional[str] = None
+    copy_source: bool = False
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):

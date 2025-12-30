@@ -106,7 +106,7 @@ class TestPipelineOrchestrator:
         orchestrator = PipelineOrchestrator(config, verbose=False)
 
         assert orchestrator.output_manager is not None
-        assert orchestrator.output_manager.base_dir == config.output_base_dir
+        assert orchestrator.output_manager.base_dir == config.output_base_dir.resolve()
 
     def test_invalid_config(self):
         """Test initialization with invalid config."""
@@ -212,3 +212,50 @@ class TestPipelineOrchestrator:
         assert "PipelineOrchestrator" in repr_str
         assert "stages=2" in repr_str
         assert "sequential" in repr_str
+
+    @patch('video_chapter_automater.pipeline.stage.Stage.execute')
+    def test_execute_with_project_and_copy_source(
+        self,
+        mock_stage_execute,
+        test_video_path,
+        tmp_path
+    ):
+        """Test execution with project name and source copying."""
+        from video_chapter_automater.pipeline.stage import StageResult
+        from video_chapter_automater.preprocessing.base import PreprocessingResult
+        from video_chapter_automater.output.manager import OutputType
+
+        # Mock stage execution
+        mock_result = PreprocessingResult(success=True, output_path=test_video_path, duration=1.0)
+        mock_stage_result = StageResult(
+            stage=PipelineStage.AUDIO_EXTRACTION,
+            status=StageStatus.COMPLETED,
+            preprocessing_result=mock_result
+        )
+        mock_stage_execute.return_value = mock_stage_result
+
+        # Config with project and copy_source
+        project_name = "test_project"
+        config = PipelineConfig.create_minimal()
+        config.output_base_dir = tmp_path / "output"
+        config.project_name = project_name
+        config.copy_source = True
+        config.enable_progress_bars = False
+
+        orchestrator = PipelineOrchestrator(config)
+        result = orchestrator.execute(test_video_path)
+
+        assert result.success is True
+        
+        # Verify project folder
+        expected_base = (tmp_path / "output" / project_name).resolve()
+        assert orchestrator.output_manager.base_dir == expected_base
+        
+        # Verify source file was copied
+        source_file = expected_base / "source" / test_video_path.name
+        assert source_file.exists()
+        assert source_file.read_bytes() == test_video_path.read_bytes()
+
+        # Verify other subdirs exists
+        assert (expected_base / "audio").exists()
+        assert (expected_base / "scenes").exists()

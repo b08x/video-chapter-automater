@@ -82,6 +82,16 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable system resource monitoring"
     )
+    pipeline_group.add_argument(
+        "--project", "--project-name",
+        type=str,
+        help="Project subfolder name (default: video file stem)"
+    )
+    pipeline_group.add_argument(
+        "--copy-source",
+        action="store_true",
+        help="Copy source video file to project subfolder"
+    )
 
     # Stage selection (preset configurations)
     preset_group = parser.add_argument_group("Pipeline Presets")
@@ -229,10 +239,15 @@ def build_pipeline_config(args: argparse.Namespace) -> PipelineConfig:
     else:
         execution_mode = ExecutionMode.SEQUENTIAL
 
+    # Determine project name
+    project_name = args.project if args.project else args.video_file.stem
+
     # Create base config
     config = PipelineConfig(
         execution_mode=execution_mode,
         output_base_dir=args.output_dir,
+        project_name=project_name,
+        copy_source=args.copy_source,
         enable_monitoring=not args.no_monitoring,
         enable_progress_bars=not args.no_progress,
         stop_on_error=(args.mode != "resilient")
@@ -373,6 +388,7 @@ def main() -> int:
         # Create output manager
         output_manager = OutputManager(
             base_dir=config.output_base_dir,
+            project_name=config.project_name,
             auto_create=True
         )
 

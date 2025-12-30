@@ -488,8 +488,8 @@ class SetupWizard:
             instructions += "\n"
 
         if not shutil.which("scenedetect"):
-            instructions += "🐍 PySceneDetect: pip install scenedetect[opencv]\n"
-            instructions += "🐍 Or with uv: uv add scenedetect[opencv]\n\n"
+            instructions += "🐍 PySceneDetect: pip install scenedetect opencv-python-headless\n"
+            instructions += "🐍 Or with uv: uv add scenedetect opencv-python-headless\n\n"
 
         instructions += "🔄 Run this setup wizard again after installing missing components."
 
@@ -774,13 +774,14 @@ class SetupWizard:
         """Get list of packages to install based on configuration."""
         packages = [
             ("Rich TUI Library", "rich"),
-            ("Scene Detection", "scenedetect[opencv]>=0.6.0")]
+            ("Scene Detection", "scenedetect>=0.6.0"),
+            ("OpenCV Headless", "opencv-python-headless>=4.6.0")]
 
         if self.preferences.installation_type in [InstallationType.FULL, InstallationType.STANDARD]:
             if self.preferences.enable_gpu_acceleration:
                 packages.extend([
-                    ("OpenCV with GPU",
-                     "opencv-python-headless[contrib]>=4.6.0"),
+                    ("OpenCV Headless",
+                     "opencv-python-headless>=4.6.0"),
                 ])
 
                 # NVIDIA-specific packages

@@ -125,6 +125,7 @@ class PipelineOrchestrator:
         if output_manager is None:
             output_manager = OutputManager(
                 base_dir=config.output_base_dir,
+                project_name=config.project_name,
                 auto_create=True
             )
         self.output_manager = output_manager
@@ -170,6 +171,10 @@ class PipelineOrchestrator:
         # Display pipeline start
         if self.config.enable_progress_bars:
             self._display_pipeline_header(input_path)
+
+        # Copy source file if requested
+        if self.config.copy_source:
+            self._copy_source_file(input_path)
 
         # Execute based on mode
         if self.config.execution_mode == ExecutionMode.SEQUENTIAL:
@@ -510,6 +515,25 @@ class PipelineOrchestrator:
             if stage.config.enabled:
                 total += stage.estimate_duration(input_path)
         return total
+
+    def _copy_source_file(self, input_path: Path) -> None:
+        """
+        Copy source file to project directory.
+
+        Args:
+            input_path: Path to source file
+        """
+        try:
+            source_dir = self.output_manager.get_subdir(OutputType.SOURCE)
+            dest_path = source_dir / input_path.name
+            
+            if self.verbose:
+                console.print(f"[dim]Copying source file to {dest_path}...[/dim]")
+                
+            import shutil
+            shutil.copy2(input_path, dest_path)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to copy source file: {e}[/yellow]")
 
     def __repr__(self) -> str:
         """String representation of orchestrator."""

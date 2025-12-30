@@ -12,3 +12,6 @@
 session-*
 VideoChapterAutomater.csv
 .ruff_cache/
+.pytest_cache/
+*.mp4
+vca_output/

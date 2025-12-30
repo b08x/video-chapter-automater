@@ -120,7 +120,7 @@ class SceneExtractor(PreprocessingOperation):
         if not SCENEDETECT_AVAILABLE:
             raise DependencyError(
                 "scenedetect",
-                "Install with: pip install scenedetect[opencv]"
+                "Install with: pip install scenedetect opencv-python-headless"
             )
 
         self.verbose = verbose

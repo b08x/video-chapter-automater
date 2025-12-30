@@ -369,7 +369,7 @@ class EnhancedVideoProcessor:
                     f"Please ensure it is installed and in your PATH.\n\n"
                     f"💡 [bold yellow]Installation Help:[/bold yellow]\n"
                     f"• For FFmpeg: https://ffmpeg.org/download.html\n"
-                    f"• For PySceneDetect: pip install scenedetect[opencv]\n"
+                    f"• For PySceneDetect: pip install scenedetect opencv-python-headless\n"
                     f"• For chapconv: pip install chapconv",
                     title="[bold red]❌ Dependency Missing[/bold red]",
                     border_style="red"
