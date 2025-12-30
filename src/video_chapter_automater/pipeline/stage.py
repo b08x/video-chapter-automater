@@ -224,11 +224,11 @@ class Stage:
         if self.config.stage == PipelineStage.VIDEO_ENCODING:
             # Video encoding: requires codec name
             codec = kwargs.get('codec', 'h264_nvenc')
-            return self.operation.execute(input_path, stage_config, codec_name=codec)
+            return self.operation.execute(input_path, stage_config, codec_name=codec, output_dir=output_dir)
 
         elif self.config.stage == PipelineStage.AUDIO_EXTRACTION:
             # Audio extraction: uses default output path
-            return self.operation.execute(input_path, stage_config)
+            return self.operation.execute(input_path, stage_config, output_dir=output_dir)
 
         elif self.config.stage == PipelineStage.SCENE_EXTRACTION:
             # Scene extraction: requires output directory

@@ -77,7 +77,8 @@ class VideoEncoder(PreprocessingOperation):
         self,
         input_path: Path,
         config: VideoEncodingConfig,
-        codec_name: str = "h264_nvenc"
+        codec_name: str = "h264_nvenc",
+        output_dir: Optional[Path] = None
     ) -> VideoEncodingResult:
         """
         Re-encode video file with specified codec.
@@ -211,7 +212,8 @@ class VideoEncoder(PreprocessingOperation):
         config: VideoEncodingConfig,
         strategy: CodecStrategy,
         gpu_type: str,
-        codec_name: str
+        codec_name: str,
+        output_dir: Optional[Path] = None
     ) -> VideoEncodingResult:
         """
         Attempt encoding with GPU, fall back to CPU if it fails.
@@ -243,7 +245,14 @@ class VideoEncoder(PreprocessingOperation):
 
         # Try encoding
         try:
-            return self._execute_encoding(input_path, config, strategy, gpu_type, codec_name)
+            return self._execute_encoding(
+                input_path,
+                config,
+                strategy,
+                gpu_type,
+                codec_name,
+                output_dir=output_dir
+            )
 
         except subprocess.CalledProcessError as e:
             # GPU encoding failed
@@ -257,7 +266,8 @@ class VideoEncoder(PreprocessingOperation):
                     strategy,
                     codec_name,
                     gpu_type,
-                    stderr
+                    stderr,
+                    output_dir=output_dir
                 )
             else:
                 # CPU encoding also failed, re-raise
@@ -273,7 +283,8 @@ class VideoEncoder(PreprocessingOperation):
         config: VideoEncodingConfig,
         strategy: CodecStrategy,
         gpu_type: str,
-        codec_name: str
+        codec_name: str,
+        output_dir: Optional[Path] = None
     ) -> VideoEncodingResult:
         """
         Execute FFmpeg encoding command.
@@ -296,7 +307,8 @@ class VideoEncoder(PreprocessingOperation):
         ffmpeg_cmd = self._build_ffmpeg_command(
             input_path,
             config,
-            strategy
+            strategy,
+            output_dir=output_dir
         )
 
         # Execute encoding
@@ -354,7 +366,8 @@ class VideoEncoder(PreprocessingOperation):
         strategy: CodecStrategy,
         codec_name: str,
         gpu_type: str,
-        error_message: str
+        error_message: str,
+        output_dir: Optional[Path] = None
     ) -> VideoEncodingResult:
         """
         Handle GPU encoding failure with interactive fallback.
@@ -421,7 +434,8 @@ class VideoEncoder(PreprocessingOperation):
                 config,
                 fallback_strategy,
                 "cpu",
-                self._get_fallback_codec_name(codec_name)
+                self._get_fallback_codec_name(codec_name),
+                output_dir=output_dir
             )
         except subprocess.CalledProcessError as e:
             stderr = e.stderr if e.stderr else "Unknown error"
@@ -435,7 +449,8 @@ class VideoEncoder(PreprocessingOperation):
         self,
         input_path: Path,
         config: VideoEncodingConfig,
-        strategy: CodecStrategy
+        strategy: CodecStrategy,
+        output_dir: Optional[Path] = None
     ) -> list[str]:
         """
         Build FFmpeg command for video encoding.
@@ -450,7 +465,11 @@ class VideoEncoder(PreprocessingOperation):
         """
         # Generate output filename
         output_filename = f"{input_path.stem}_reencoded{input_path.suffix}"
-        output_path = input_path.parent / output_filename
+        
+        if output_dir:
+            output_path = output_dir / output_filename
+        else:
+            output_path = input_path.parent / output_filename
 
         cmd = ["ffmpeg", "-y"]  # -y = overwrite output file
 

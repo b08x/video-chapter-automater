@@ -81,7 +81,8 @@ class AudioExtractor(PreprocessingOperation):
     def execute(
         self,
         input_path: Path,
-        config: AudioExtractionConfig
+        config: AudioExtractionConfig,
+        output_dir: Optional[Path] = None
     ) -> AudioExtractionResult:
         """
         Extract audio from video file.
@@ -103,7 +104,7 @@ class AudioExtractor(PreprocessingOperation):
         self.validate_input(input_path)
 
         # Build FFmpeg command
-        ffmpeg_cmd = self._build_ffmpeg_command(input_path, config)
+        ffmpeg_cmd = self._build_ffmpeg_command(input_path, config, output_dir=output_dir)
 
         # Execute extraction
         try:
@@ -210,7 +211,8 @@ class AudioExtractor(PreprocessingOperation):
     def _build_ffmpeg_command(
         self,
         input_path: Path,
-        config: AudioExtractionConfig
+        config: AudioExtractionConfig,
+        output_dir: Optional[Path] = None
     ) -> list[str]:
         """
         Build FFmpeg command for audio extraction.
@@ -224,7 +226,11 @@ class AudioExtractor(PreprocessingOperation):
         """
         # Generate output filename
         output_filename = f"{input_path.stem}.{config.format}"
-        output_path = input_path.parent / output_filename
+        
+        if output_dir:
+            output_path = output_dir / output_filename
+        else:
+            output_path = input_path.parent / output_filename
 
         cmd = ["ffmpeg", "-y"]  # -y = overwrite output file
 
