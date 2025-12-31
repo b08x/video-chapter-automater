@@ -50,7 +50,6 @@ class VideoProcessor:
     Features:
     - Progressive enhancement (Rich UI when available)
     - GPU acceleration with automatic fallback
-    - Python-native chapter conversion (no Node.js dependency)
     - Comprehensive error handling and recovery
     """
     

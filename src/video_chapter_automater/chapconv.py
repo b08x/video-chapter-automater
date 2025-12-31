@@ -1,7 +1,6 @@
 """
 Python-native chapter format conversion.
 
-Replaces the Node.js chapconv dependency with pure Python implementation.
 Converts PySceneDetect CSV output to FFmpeg-compatible chapter format.
 """
 
